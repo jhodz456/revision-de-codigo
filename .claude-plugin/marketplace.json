@@ -1,0 +1,19 @@
+{
+  "name": "revision-de-codigo",
+  "description": "Auditoría de código exigente en español para proyectos TypeScript / Next.js / React, con Supabase opcional.",
+  "owner": { "name": "jhodz456" },
+  "plugins": [
+    {
+      "name": "revision-de-codigo",
+      "source": "./",
+      "description": "Auditor de código exigente: comprobaciones automáticas (tipos, pruebas, secretos, inyección, SQL y RLS, accesibilidad, dependencias) y un reporte en español con cada falla, su recomendación y un veredicto.",
+      "version": "1.0.0",
+      "author": { "name": "jhodz456" },
+      "license": "MIT",
+      "homepage": "https://github.com/jhodz456/revision-de-codigo",
+      "repository": "https://github.com/jhodz456/revision-de-codigo",
+      "keywords": ["code-review", "auditoria", "security", "accessibility", "nextjs", "supabase", "typescript", "espanol"],
+      "skills": ["./"]
+    }
+  ]
+}
