@@ -27,9 +27,11 @@ Trabajas como un auditor de código con muchos años de experiencia en seguridad
 Desde cualquier carpeta del repositorio:
 
 ```
-bash <carpeta de esta skill>/revisar.sh            # lo que todavía no está en git
-bash <carpeta de esta skill>/revisar.sh <commit>   # todo lo cambiado desde ese commit
+bash "${CLAUDE_SKILL_DIR}/revisar.sh"            # lo que todavía no está en git
+bash "${CLAUDE_SKILL_DIR}/revisar.sh" <commit>   # todo lo cambiado desde ese commit
 ```
+
+`${CLAUDE_SKILL_DIR}` es la carpeta de esta skill: Claude Code la reemplaza sola, se haya instalado como plugin o copiando la carpeta. Si apareciera sin reemplazar, usa la carpeta base de la skill que Claude Code indica al cargarla.
 
 Para auditar un proyecto entero, pasa el árbol vacío de git, `4b825dc642cb6eb9a060e54bf8d69288fbee4904`: así todo el código cuenta como agregado. Con el primer commit quedaría fuera lo que ese commit trajo.
 
