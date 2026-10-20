@@ -23,9 +23,9 @@ ESTA_CARPETA="${ESTA_CARPETA#"$RAIZ"/}"
 DESDE="${1:-}"
 if [ -n "$DESDE" ]; then RANGO="$DESDE"; echo "== Cambios desde $DESDE"; else RANGO="HEAD"; echo "== Cambios sin guardar en git"; fi
 
-# Lo que no se revisa: lo que diga .revision/excluir.txt y esta misma skill si vive dentro del repositorio (sus
-# patrones se marcarían a sí mismos). Si vive afuera (~/.claude/skills), no hace falta.
-EXCLUIR=()
+# Lo que no se revisa: la carpeta .revision (sus patrones se marcarían a sí mismos), lo que diga
+# .revision/excluir.txt y esta misma skill si vive dentro del repositorio. Si vive afuera (~/.claude/skills), no hace falta.
+EXCLUIR=(.revision)
 case "$ESTA_CARPETA" in /*) ;; *) EXCLUIR+=("$ESTA_CARPETA");; esac
 if [ -f .revision/excluir.txt ]; then
   while IFS= read -r ruta; do [ -n "$ruta" ] && [ "${ruta:0:1}" != "#" ] && EXCLUIR+=("$ruta"); done < .revision/excluir.txt
@@ -45,6 +45,13 @@ AGREGADO=$(git diff -U0 "$RANGO" -- "${ESPECIFICACION[@]}" | grep '^+' | grep -v
 while IFS= read -r nuevo; do
   [ -n "$nuevo" ] && ! fuera "$nuevo" && [ -f "$nuevo" ] && AGREGADO+=$'\n'"$(sed 's/^/+/' "$nuevo")"
 done < <(git ls-files --others --exclude-standard | grep -E '\.(ts|tsx|mts|cts|js|jsx|mjs|css|sql|sh|html)$' || true)
+# Lo mismo, pero solo de archivos de código: los patrones de código no se buscan en la documentación (que los nombra).
+# Los secretos sí se buscan en todo.
+EXT_CODIGO='\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|scss|sql|sh|html|vue|svelte|astro)$'
+AGREGADO_CODIGO=$(git diff -U0 "$RANGO" --name-only -- "${ESPECIFICACION[@]}" | grep -E "$EXT_CODIGO" | while IFS= read -r f; do git diff -U0 "$RANGO" -- "$f"; done | grep '^+' | grep -v '^+++' || true)
+while IFS= read -r nuevo; do
+  [ -n "$nuevo" ] && ! fuera "$nuevo" && [ -f "$nuevo" ] && AGREGADO_CODIGO+=$'\n'"$(sed 's/^/+/' "$nuevo")"
+done < <(git ls-files --others --exclude-standard | grep -E "$EXT_CODIGO" || true)
 
 CRITICOS=0; ALTOS=0; MEDIOS=0; BAJOS=0
 # Cada sección que termina sin hallazgos ni otra salida dice OK, para que se vea que sí se revisó.
@@ -62,7 +69,9 @@ hallazgo() {
   return 0
 }
 mostrar() { sed 's/^/      /'; }
-buscar() { printf '%s\n' "$AGREGADO" | grep -nE "$1" || true; }
+# Dónde busca regla: en el código agregado, salvo que antes se pida todo (EN_TODO=1, para los secretos).
+EN_TODO=0
+buscar() { if [ "$EN_TODO" = 1 ]; then printf '%s\n' "$AGREGADO"; else printf '%s\n' "$AGREGADO_CODIGO"; fi | grep -nE "$1" || true; }
 # Un patrón en lo agregado: si aparece, un hallazgo con todas sus líneas y la recomendación que se haya dejado en
 # RECOMENDACION justo antes de llamar.
 RECOMENDACION=""
@@ -72,7 +81,7 @@ regla() {
   [ -n "$excepto" ] && encontrado=$(printf '%s\n' "$encontrado" | grep -vE "$excepto" || true)
   encontrado=$(printf '%s\n' "$encontrado" | grep -v '^$' || true)
   if [ -n "$encontrado" ]; then hallazgo "$gravedad" "$texto" "$RECOMENDACION"; printf '%s\n' "$encontrado" | mostrar; fi
-  RECOMENDACION=""
+  RECOMENDACION=""; EN_TODO=0
 }
 tiene_ts() { [ -f tsconfig.json ]; }
 
@@ -109,6 +118,7 @@ else decir "El script de pruebas no enumera archivos: se omite"; fi
 
 titulo "5. Secretos y archivos que no deben subirse"
 RECOMENDACION="Sácalo del código y léelo de una variable de entorno o del gestor de secretos del servidor. Si ya llegó a git o a un servidor, revócalo y genera uno nuevo: borrarlo del archivo no basta."
+EN_TODO=1
 regla CRITICO "posible secreto en el código (no lo subas; si ya salió, cámbialo):" \
   'sb_secret_|service_role|SERVICE_ROLE_KEY=|eyJhbGciOi[A-Za-z0-9_-]{20,}|BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY|xkeysib-|xi-api-key|AIza[0-9A-Za-z_-]{30}|sk_live_|sk_test_|sk-[A-Za-z0-9_-]{20}|ghp_[A-Za-z0-9]{30}|github_pat_|xox[baprs]-|AKIA[0-9A-Z]{16}|(password|passwd|secret|api_?key|token)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' \
   'process\.env|Deno\.env\.get|import\.meta\.env|placeholder|ejemplo|example'
