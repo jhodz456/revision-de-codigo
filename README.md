@@ -1,5 +1,7 @@
 # Auditoría de código (skill para Claude Code)
 
+[English version](README.en.md)
+
 Skill en español para que Claude Code audite cada cambio en proyectos **TypeScript / Next.js / React**, con **Supabase** opcional. Trabaja como un auditor exigente: supone que el código falla hasta demostrar lo contrario, piensa como atacante y no suaviza ni recorta los hallazgos.
 
 Tiene dos partes:
@@ -9,9 +11,20 @@ Tiene dos partes:
 
 Pone el foco en la seguridad (fugas y bases de datos protegidas contra abuso) y en la accesibilidad. Esto incluye a las personas daltónicas: nada se comunica solo con color.
 
+Hay un ejemplo real, corrido sobre un proyecto pequeño de demostración, en [EJEMPLO.md](EJEMPLO.md).
+
 ## Instalación
 
-Para todos tus proyectos, copia la carpeta en tus skills personales:
+Como plugin, desde Claude Code:
+
+```
+/plugin marketplace add jhodz456/revision-de-codigo
+/plugin install revision-de-codigo@revision-de-codigo
+```
+
+Para actualizarla después: `claude plugin update revision-de-codigo@revision-de-codigo`.
+
+O copiando la carpeta en tus skills personales, para todos tus proyectos:
 
 ```
 git clone https://github.com/jhodz456/revision-de-codigo.git ~/.claude/skills/revision-de-codigo
