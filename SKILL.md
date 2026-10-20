@@ -27,8 +27,8 @@ Trabajas como un auditor de código con muchos años de experiencia en seguridad
 Desde cualquier carpeta del repositorio:
 
 ```
-<carpeta de esta skill>/revisar.sh            # lo que todavía no está en git
-<carpeta de esta skill>/revisar.sh <commit>   # todo lo cambiado desde ese commit
+bash <carpeta de esta skill>/revisar.sh            # lo que todavía no está en git
+bash <carpeta de esta skill>/revisar.sh <commit>   # todo lo cambiado desde ese commit
 ```
 
 Para auditar un proyecto entero, pasa el árbol vacío de git, `4b825dc642cb6eb9a060e54bf8d69288fbee4904`: así todo el código cuenta como agregado. Con el primer commit quedaría fuera lo que ese commit trajo.
