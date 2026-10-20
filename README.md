@@ -36,11 +36,11 @@ Son opcionales y van en la raíz del repositorio:
 ## Uso directo, sin Claude
 
 ```
-~/.claude/skills/revision-de-codigo/revisar.sh            # lo que todavía no está en git
-~/.claude/skills/revision-de-codigo/revisar.sh <commit>   # todo lo cambiado desde ese commit
+bash ~/.claude/skills/revision-de-codigo/revisar.sh            # lo que todavía no está en git
+bash ~/.claude/skills/revision-de-codigo/revisar.sh <commit>   # todo lo cambiado desde ese commit
 ```
 
-Para auditar un proyecto entero, pasa el árbol vacío de git: `revisar.sh 4b825dc642cb6eb9a060e54bf8d69288fbee4904`.
+Para auditar un proyecto entero, pasa el árbol vacío de git: `bash revisar.sh 4b825dc642cb6eb9a060e54bf8d69288fbee4904`.
 
 El script no cambia nada: cada sección dice OK o lo que encontró, con su recomendación. Es el piso, no el techo: lo que marca se confirma leyendo el código, y lo que no marca no queda aprobado por eso.
 
