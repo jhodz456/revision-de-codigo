@@ -48,10 +48,11 @@ done < <(git ls-files --others --exclude-standard | grep -E '\.(ts|tsx|mts|cts|j
 # Lo mismo, pero solo de archivos de código: los patrones de código no se buscan en la documentación (que los nombra).
 # Los secretos sí se buscan en todo.
 EXT_CODIGO='\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|scss|sql|sh|html|vue|svelte|astro)$'
-AGREGADO_CODIGO=$(git diff -U0 "$RANGO" --name-only -- "${ESPECIFICACION[@]}" | grep -E "$EXT_CODIGO" | while IFS= read -r f; do git diff -U0 "$RANGO" -- "$f"; done | grep '^+' | grep -v '^+++' || true)
+# La carpeta docs/ tampoco: guarda informes (por ejemplo HTML de escáneres) que nombran los patrones.
+AGREGADO_CODIGO=$(git diff -U0 "$RANGO" --name-only -- "${ESPECIFICACION[@]}" | grep -E "$EXT_CODIGO" | grep -v '^docs/' | while IFS= read -r f; do git diff -U0 "$RANGO" -- "$f"; done | grep '^+' | grep -v '^+++' || true)
 while IFS= read -r nuevo; do
   [ -n "$nuevo" ] && ! fuera "$nuevo" && [ -f "$nuevo" ] && AGREGADO_CODIGO+=$'\n'"$(sed 's/^/+/' "$nuevo")"
-done < <(git ls-files --others --exclude-standard | grep -E "$EXT_CODIGO" || true)
+done < <(git ls-files --others --exclude-standard | grep -E "$EXT_CODIGO" | grep -v '^docs/' || true)
 
 CRITICOS=0; ALTOS=0; MEDIOS=0; BAJOS=0
 # Cada sección que termina sin hallazgos ni otra salida dice OK, para que se vea que sí se revisó.
@@ -108,7 +109,9 @@ if [ -n "$LOGICA" ] && [ -z "$PRUEBAS_CAMBIADAS" ]; then hallazgo MEDIO "cambió
 
 titulo "4. Archivos de prueba que el script de pruebas no nombra"
 # Solo aplica cuando el script "test" enumera los archivos uno por uno (por ejemplo "tsx --test a.test.ts b.test.ts").
-if grep -qE '"test"[[:space:]]*:[[:space:]]*"[^"]*\.test\.' package.json 2>/dev/null; then
+# Con comodines (test/*.test.ts) o carpetas, el corredor las encuentra solas: no aplica.
+SCRIPT_TEST=$(grep -oE '"test"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null || true)
+if printf '%s' "$SCRIPT_TEST" | grep -qE '\.test\.' && ! printf '%s' "$SCRIPT_TEST" | grep -qE '\*'; then
   FALTAN=""
   while IFS= read -r prueba; do
     [ -n "$prueba" ] && ! fuera "$prueba" && ! grep -qF "$prueba" package.json && FALTAN+="$prueba "
@@ -129,15 +132,15 @@ if [ -n "$GRANDES" ]; then hallazgo MEDIO "archivos de más de 1 MB en el cambio
 
 titulo "6. Patrones peligrosos"
 RECOMENDACION="Muestra el texto como texto (React ya lo escapa). Si de verdad hace falta HTML, límpialo con una librería probada (DOMPurify) y nunca ejecutes texto como código."
-regla CRITICO "inyección de HTML o código dinámico:" 'dangerouslySetInnerHTML|\.innerHTML[[:space:]]*\+?=|outerHTML[[:space:]]*=|insertAdjacentHTML|eval\(|new Function\(|document\.write|setTimeout\([[:space:]]*["'"'"'`]'
+regla ALTO "HTML inyectado o código dinámico (confirmar que nada venga de una persona):" 'dangerouslySetInnerHTML|\.innerHTML[[:space:]]*\+?=|outerHTML[[:space:]]*=|insertAdjacentHTML|eval\(|new Function\(|document\.write|setTimeout\([[:space:]]*["'"'"'`]'
 RECOMENDACION="Valida que la URL empiece con https:// (o sea una ruta propia) antes de abrirla, y nunca armes enlaces con datos que escribe una persona."
 regla ALTO "URL javascript: o window.open/location con datos variables:" 'href=["'"'"'{`]*javascript:|window\.open\([^)]*\$\{|location(\.href)?[[:space:]]*=[^=][^;]*\$\{'
 RECOMENDACION="Usa parámetros del cliente de la base o funciones con argumentos; en PL/pgSQL, format() con %I y %L. Nunca concatenes lo que escribe una persona."
-regla ALTO "SQL armado con texto (inyección):" '(select|insert|update|delete)[^;]*\$\{|\.(rpc|query|raw)\([^)]*\+[[:space:]]*[a-zA-Z_]|execute[[:space:]]+[^;]*\|\|' 'format\(.*%I|quote_ident|quote_literal'
+regla ALTO "SQL armado con texto (inyección):" '([Ss][Ee][Ll][Ee][Cc][Tt][[:space:]][^;]*[[:space:]][Ff][Rr][Oo][Mm][[:space:]]|[Ii][Nn][Ss][Ee][Rr][Tt][[:space:]]+[Ii][Nn][Tt][Oo][[:space:]]|[Uu][Pp][Dd][Aa][Tt][Ee][[:space:]]+[A-Za-z_."]+[[:space:]]+[Ss][Ee][Tt][[:space:]]|[Dd][Ee][Ll][Ee][Tt][Ee][[:space:]]+[Ff][Rr][Oo][Mm][[:space:]])[^;]*\$\{|\.(rpc|query|raw|prepare|exec)\([^)]*\+[[:space:]]*[a-zA-Z_]|execute[[:space:]]+[^;]*\|\|' 'format\(.*%I|quote_ident|quote_literal|\$(queryRaw|executeRaw)(<[^`]*>)?`|[^A-Za-z_]sql`|Prisma\.sql'
 RECOMENDACION="Guarda sesiones y claves en el almacenamiento seguro del sistema (Keychain o Keystore) o en cookies httpOnly; el almacenamiento del navegador lo lee cualquier script de la página."
 regla ALTO "datos sensibles en almacenamiento del navegador:" '(localStorage|sessionStorage)\.setItem\([^)]*(clave|password|contrase|token|secret|session)'
 RECOMENDACION="Compara event.origin con una lista de orígenes permitidos antes de usar el mensaje."
-regla ALTO "postMessage sin comprobar el origen:" 'addEventListener\([[:space:]]*["'"'"']message["'"'"']' 'origin'
+regla ALTO "postMessage sin comprobar el origen:" 'addEventListener\([[:space:]]*["'"'"']message["'"'"']' 'origin|[Ss]ocket|ws\.|[Ww]orker'
 RECOMENDACION="Devuelve solo los orígenes propios, comparados contra una lista, y agrega Vary: Origin."
 regla ALTO "CORS abierto a cualquiera:" 'Access-Control-Allow-Origin["'"'"']?[[:space:]]*[:,][[:space:]]*["'"'"']\*'
 RECOMENDACION="Usa crypto.randomUUID() o crypto.getRandomValues()."
@@ -145,7 +148,7 @@ regla ALTO "Math.random para identificadores, claves o tokens (es predecible):" 
 RECOMENDACION="Cambia a https://. Si el sitio no tiene https, no lo enlaces."
 regla MEDIO "enlaces a http:// sin cifrar:" 'http://[^l1[:space:]"'"'"']' 'localhost|127\.0\.0\.1|www\.w3\.org|xmlns'
 RECOMENDACION="Agrega rel=noopener noreferrer."
-regla MEDIO "target=_blank sin rel=noopener:" 'target=["'"'"'{]*_blank' 'noopener|noreferrer'
+regla MEDIO "target=_blank sin rel=noopener en la misma línea (confirmar si está en la siguiente):" 'target=["'"'"'{]*_blank' 'noopener|noreferrer'
 RECOMENDACION="Quítalas. Si hace falta registrar algo, que sea sin datos personales y con un registrador que se apague en producción."
 regla MEDIO "salidas de depuración:" 'console\.(log|debug|trace)\(|debugger'
 RECOMENDACION="Corrige el tipo o la regla en vez de apagarla. Si es inevitable, deja un comentario con el porqué y la fecha."
@@ -162,15 +165,28 @@ SQL=$(printf '%s' "$ARCHIVOS" | grep '\.sql$' || true)
 if [ -z "$SQL" ]; then decir "Sin cambios de SQL"; else
   while IFS= read -r f; do
     [ -f "$f" ] || continue
+    # Un archivo para deshacer un cambio devuelve a propósito el estado anterior: no se juzga con estas reglas.
+    case "$f" in *revertir*|*revert*|*rollback*|*/down.sql|*.down.sql) decir "$f (archivo para deshacer: se omite)"; continue;; esac
     decir "$f"
-    if grep -qi 'create table' "$f" && ! grep -qi 'enable row level security' "$f"; then hallazgo CRITICO "$f crea tablas sin activar RLS: cualquiera con la llave pública las lee" "alter table ... enable row level security, y reglas que solo dejen ver y cambiar lo propio."; fi
+    # RLS puede activarse en otro archivo (por ejemplo db/rls.sql), tabla por tabla o recorriendo una lista de nombres:
+    # cuenta como activada si la tabla aparece en algún archivo SQL del repositorio que active RLS.
+    SIN_RLS=""
+    ARCHIVOS_RLS=$(git grep -liE 'enable row level security' -- '*.sql' 2>/dev/null | grep -vE 'revertir|revert|rollback|down\.sql' || true)
+    for tabla in $(grep -oiE 'create table[[:space:]]+(if not exists[[:space:]]+)?[A-Za-z0-9_."]+' "$f" | awk '{print $NF}' | tr -d '"' | sed 's/.*\.//'); do
+      con_rls=0
+      while IFS= read -r a; do
+        [ -n "$a" ] && grep -qiE "(^|[^a-z0-9_])$tabla([^a-z0-9_]|$)" "$a" && con_rls=1 && break
+      done <<< "$ARCHIVOS_RLS"
+      [ "$con_rls" = 1 ] || SIN_RLS+="$tabla "
+    done
+    if [ -n "$SIN_RLS" ]; then hallazgo CRITICO "$f crea tablas sin RLS en ningún archivo del repositorio: $SIN_RLS" "alter table ... enable row level security, y reglas que solo dejen ver y cambiar lo propio."; fi
     if grep -qiE 'disable row level security|no force row level security' "$f"; then hallazgo CRITICO "$f apaga RLS" "No la apagues. Si un proceso necesita saltarla, usa una función security definer acotada."; fi
     definer=$(grep -ci 'security definer' "$f"); fijo=$(grep -ci 'set search_path' "$f")
     if [ "$definer" -gt "$fijo" ]; then hallazgo ALTO "$f: funciones security definer sin search_path fijo ($definer definer, $fijo search_path)" "Agrega set search_path a cada función security definer (vacío, calificando las tablas con su esquema)."; fi
     if grep -qiE 'grant[^;]*to[^;]*\banon\b' "$f"; then hallazgo ALTO "$f da permisos a anon (visitantes sin sesión): justificar cada uno" "Quita los que no hagan falta antes de iniciar sesión."; fi
     if grep -qiE 'using[[:space:]]*\([[:space:]]*true[[:space:]]*\)|with check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$f"; then hallazgo ALTO "$f tiene reglas con true: dejan leer o escribir todas las filas" "Cambia true por una condición sobre el usuario, como auth.uid() = dueño."; fi
     if grep -qi 'security definer' "$f" && ! grep -qiE 'revoke[^;]*from[^;]*public' "$f"; then hallazgo ALTO "$f crea funciones security definer sin revocar el permiso por omisión a public" "revoke all on function ... from public, anon; y luego grant execute solo a quien la use."; fi
-    if grep -qi 'create table' "$f" && ! grep -qiE 'trigger|check[[:space:]]*\(' "$f"; then hallazgo ALTO "$f: tabla nueva sin topes ni checks: abierta a inserciones masivas y a textos sin límite" "Agrega un disparador con tope por usuario y por hora, con la fecha puesta por el servidor, y checks de largo."; fi
+    if grep -qi 'create table' "$f" && ! grep -qiE 'trigger|check[[:space:]]*\(' "$f"; then hallazgo MEDIO "$f: tabla nueva sin disparadores ni checks en el mismo archivo: confirmar topes contra inserciones masivas y límites de largo" "Agrega un disparador con tope por usuario y por hora, con la fecha puesta por el servidor, y checks de largo."; fi
     if grep -qiE 'drop (table|column)|truncate|delete from [a-z_.]+[[:space:]]*;' "$f"; then hallazgo ALTO "$f borra datos o estructura: exige respaldo y plan para revertir" "Respalda la base antes, prueba en un entorno de prueba y deja listo el script para deshacerlo."; fi
     if grep -qiE '\btext\b' "$f" && ! grep -qiE 'char_length|length\(|octet_length' "$f"; then hallazgo MEDIO "$f tiene columnas text sin límite de largo" "Agrega check (char_length(columna) <= N) con un N razonable."; fi
   done <<< "$SQL"
@@ -204,7 +220,7 @@ if printf '%s' "$ARCHIVOS" | grep -qx 'package.json'; then
 fi
 
 titulo "10. Pendientes y restos de pruebas manuales"
-PATRONES='TODO|FIXME|XXX|HACK|\.only\(|\.skip\('
+PATRONES='(^|[^[:alnum:]_])(TODO|FIXME|XXX|HACK)([^[:alnum:]_]|$)|\.only\(|\.skip\('
 if [ -f .revision/restos.txt ]; then
   while IFS= read -r p; do [ -n "$p" ] && [ "${p:0:1}" != "#" ] && PATRONES+="|$p"; done < .revision/restos.txt
 fi
